@@ -1,0 +1,91 @@
+/* styles/tokens.css — Pulse Design System */
+/* Single source of truth. Never hardcode hex values anywhere else. */
+
+:root {
+  /* ── Backgrounds ─────────────────────────────── */
+  --background:  #0D0D0D;
+  --panel:       #141414;
+  --panel-dark:  #1A1A1A;
+  --recommendations-bg: #1A1600;
+
+  /* ── Semantic surface aliases ─────────────────── */
+  --card:        #141414;
+  --popover:     #1A1A1A;
+  --secondary:   #1A1A1A;
+  --muted:       #1A1A1A;
+  --input:       #141414;
+
+  /* ── Foregrounds ─────────────────────────────── */
+  --foreground:             #F0F0F0;
+  --card-foreground:        #F0F0F0;
+  --popover-foreground:     #F0F0F0;
+  --secondary-foreground:   #F0F0F0;
+  --destructive-foreground: #F0F0F0;
+  --muted-foreground:       #888888;
+  --primary-foreground:     #0D0D0D;
+  --accent-foreground:      #0D0D0D;
+
+  /* ── Brand accent ────────────────────────────── */
+  --primary:  #E8C547;
+  --accent:   #E8C547;
+  --ring:     #E8C547;
+
+  /* ── State ───────────────────────────────────── */
+  --destructive: #E85D4A;
+
+  /* ── Borders ─────────────────────────────────── */
+  --border: #2A2A2A;
+
+  /* ── Emotion colours (Pulse-specific) ───────────
+     Mapped to the 5 sentiment categories.
+     Used for badges, chart lines, and alert states. */
+  --emotion-excited:  #F5C842;   /* amber — high energy positive */
+  --emotion-positive: #4CAF50;   /* green  */
+  --emotion-neutral:  #888888;   /* grey — muted-foreground */
+  --emotion-negative: #E8954A;   /* orange */
+  --emotion-angry:    #E85D4A;   /* red — destructive scale */
+
+  /* ── Alert state (negative spike) ───────────── */
+  --alert-bg:     #1A0D0D;
+  --alert-border: #E85D4A;
+
+  /* ── Score colours (retained for chart axes) ── */
+  --score-high: #4CAF50;
+  --score-mid:  #E8C547;
+  --score-low:  #E85D4A;
+
+  /* ── Gated / IN DEVELOPMENT ──────────────────── */
+  --gated:            #111111;
+  --gated-border:     #1E1E1E;
+  --gated-foreground: #333333;
+
+  /* ── Shape ───────────────────────────────────── */
+  --radius: 2px;
+
+  /* ── Scrollbar ───────────────────────────────── */
+  --scrollbar-width:       6px;
+  --scrollbar-track:       var(--panel);
+  --scrollbar-thumb:       var(--border);
+  --scrollbar-thumb-hover: var(--primary);
+}
+
+.dark {
+  --background:       #0D0D0D;
+  --panel:            #141414;
+  --panel-dark:       #1A1A1A;
+  --foreground:       #F0F0F0;
+  --muted-foreground: #888888;
+  --primary:          #E8C547;
+  --border:           #2A2A2A;
+  --destructive:      #E85D4A;
+  --score-high:       #4CAF50;
+  --score-mid:        #E8C547;
+  --score-low:        #E85D4A;
+  --emotion-excited:  #F5C842;
+  --emotion-positive: #4CAF50;
+  --emotion-neutral:  #888888;
+  --emotion-negative: #E8954A;
+  --emotion-angry:    #E85D4A;
+  --alert-bg:         #1A0D0D;
+  --alert-border:     #E85D4A;
+}

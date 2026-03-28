@@ -1,0 +1,25 @@
+{
+  "emotions": [
+    "excited",
+    "positive",
+    "neutral",
+    "negative",
+    "angry"
+  ],
+  "topics": [
+    "winner_reaction",
+    "presenter_performance",
+    "ceremony_production",
+    "diversity_representation",
+    "fashion_red_carpet",
+    "general_audience_reaction"
+  ],
+  "emotion_label_map": {
+    "excited": 0,
+    "positive": 1,
+    "neutral": 2,
+    "negative": 3,
+    "angry": 4
+  },
+  "f1_threshold": 0.78
+}
