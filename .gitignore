@@ -1,0 +1,22 @@
+# Environment variables — never commit
+backend/.env
+
+# Model binaries — regenerate from train.py
+backend/model/*.pkl
+backend/model/meta.json
+
+# Dataset — regenerate from generate_dataset.py
+backend/data/bafta_dataset.csv
+
+# Claude Code worktrees
+.claude/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
