@@ -37,7 +37,7 @@ export default function Simulator() {
   useEffect(() => {
     const check = async () => {
       let ok = false;
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 25; i++) {
         ok = await healthCheck();
         if (ok) break;
         await new Promise(r => setTimeout(r, 4000));
