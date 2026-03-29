@@ -215,13 +215,25 @@ requiring meaningful performance.
 
 ## 8. v2 roadmap for model improvements
 
-1. Retrain negative/angry boundary with real social data from
+1. Bootstrapped labelling from real broadcast data (REQUIRES DPIA)
+   Collect anonymised audience comments from one live show using
+   official platform APIs. Use Claude API classifications as labels.
+   Retrain XGBoost on this real dataset to eliminate Tier 2 API cost
+   at scale. Legal requirements before this can proceed: Data Protection
+   Impact Assessment (DPIA) under UK GDPR Article 35, Legitimate
+   Interests Assessment (LIA), privacy notice update, platform API
+   compliance review. Ethical requirements: anonymise at collection
+   (content only, no usernames or account IDs), train on minimum 3
+   events to avoid feedback loop, document demographic skew in
+   MODEL_DECISIONS.md. Estimated cost saving at production scale
+   (10,000+ posts/hour): eliminates ~$3/hour in Claude API spend.
+2. Retrain negative/angry boundary with real social data from
    a consented pilot with broadcast team (target: negative F1 > 0.82)
-2. Upgrade to sentence transformer for semantic classification
+3. Upgrade to sentence transformer for semantic classification
    (target: all emotions > 0.85)
-3. Expand training data beyond BAFTA to other live broadcast events
+4. Expand training data beyond BAFTA to other live broadcast events
    (election nights, sporting finals, music awards)
-4. Add confidence calibration layer to improve reliability of
+5. Add confidence calibration layer to improve reliability of
    probability scores
-5. Evaluate fairness metrics across demographic groups in test set
+6. Evaluate fairness metrics across demographic groups in test set
    using Fairlearn (as implemented in Bias Audit Dashboard)
