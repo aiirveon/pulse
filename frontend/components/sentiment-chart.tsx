@@ -62,7 +62,7 @@ export function SentimentChart({ data }: SentimentChartProps) {
             fontSize:     "10px",
             color:        tokens.chart.tooltip.text,
           }}
-          formatter={(value: number) => [`${value.toFixed(1)}%`]}
+          formatter={(value) => [`${Number(value).toFixed(1)}%`]}
         />
         <Legend
           wrapperStyle={{ fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}
