@@ -11,6 +11,10 @@ import pickle
 import json
 import numpy as np
 from pathlib import Path
+import anthropic
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 MODEL_DIR = Path(__file__).resolve().parent.parent / "model"
 
@@ -52,11 +56,90 @@ def get_shap_words(text: str, label_index: int, top_n: int = 5) -> list[str]:
         return []
 
 
+def classify_with_claude(text: str) -> dict:
+    """
+    Tier 2 classification using Claude API for short or ambiguous text.
+    Used when word count is between 4 and 20 words.
+    Returns same structure as classify_emotion.
+    """
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    prompt = (
+        f"Classify the emotion of this social media post about a live TV broadcast event.\n\n"
+        f"Post: \"{text}\"\n\n"
+        f"Choose ONE emotion from: excited, positive, neutral, negative, angry\n\n"
+        f"Rules:\n"
+        f"- excited: high energy positive, caps, exclamation marks, buzzing\n"
+        f"- positive: warm, pleased, approving, satisfied\n"
+        f"- neutral: purely observational, no emotional lean\n"
+        f"- negative: disappointed, critical, calm dissatisfaction\n"
+        f"- angry: outrage, fury, or cold sarcasm\n\n"
+        f"Also choose ALL topics that apply from:\n"
+        f"winner_reaction, presenter_performance, ceremony_production,\n"
+        f"diversity_representation, fashion_red_carpet, general_audience_reaction\n\n"
+        f"Return ONLY a JSON object with exactly these keys:\n"
+        f"emotion (string), confidence (float 0.7-0.95), topics (array of strings)\n"
+        f"No markdown, no explanation."
+    )
+
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        import json as _json
+        raw = response.content[0].text.strip()
+        if "```" in raw:
+            lines = raw.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            raw = "\n".join(lines).strip()
+        result = _json.loads(raw)
+        return {
+            "emotion":    result.get("emotion", "neutral"),
+            "confidence": float(result.get("confidence", 0.75)),
+            "shap_words": [],
+            "all_scores": {e: 0.1 for e in EMOTIONS},
+            "topics":     [{"topic": t, "confidence": 0.8}
+                          for t in result.get("topics", ["general_audience_reaction"])],
+            "tier":       2,
+        }
+    except Exception:
+        return {
+            "emotion":    "neutral",
+            "confidence": 0.5,
+            "shap_words": [],
+            "all_scores": {e: 0.2 for e in EMOTIONS},
+            "topics":     [{"topic": "general_audience_reaction", "confidence": 0.5}],
+            "tier":       2,
+        }
+
+
 def classify_emotion(text: str) -> dict:
     """
-    Classify the emotion of a social media post.
-    Returns emotion label, confidence score, and SHAP word highlights.
+    Tiered emotion classification.
+    Tier 1 (<=3 words): auto-neutral, low confidence
+    Tier 2 (4-20 words): Claude API semantic classification
+    Tier 3 (>20 words): XGBoost + SHAP
     """
+    words = text.strip().split()
+    word_count = len(words)
+
+    # Tier 1 — too short to classify reliably
+    if word_count <= 3:
+        return {
+            "emotion":    "neutral",
+            "confidence": 0.4,
+            "shap_words": [],
+            "all_scores": {e: 0.2 for e in EMOTIONS},
+            "tier":       1,
+        }
+
+    # Tier 2 — short text, use Claude for semantic understanding
+    if word_count <= 20:
+        return classify_with_claude(text)
+
+    # Tier 3 — full XGBoost + SHAP pipeline
     X = vectorizer.transform([text])
     proba = emotion_model.predict_proba(X)[0]
     label_index = int(np.argmax(proba))
@@ -65,13 +148,14 @@ def classify_emotion(text: str) -> dict:
     shap_words = get_shap_words(text, label_index)
 
     return {
-        "emotion":     emotion,
-        "confidence":  round(confidence, 4),
-        "shap_words":  shap_words,
-        "all_scores":  {
+        "emotion":    emotion,
+        "confidence": round(confidence, 4),
+        "shap_words": shap_words,
+        "all_scores": {
             e: round(float(proba[i]), 4)
             for i, e in enumerate(EMOTIONS)
         },
+        "tier": 3,
     }
 
 
