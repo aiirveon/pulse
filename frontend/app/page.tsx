@@ -191,7 +191,6 @@ export default function LiveMonitor() {
               <div className="px-4 pt-3 shrink-0">
                 <AlertBanner
                   pct={stats.alert.pct}
-                  dominantTopic={stats.alert.dominant_topic}
                   message={stats.alert.message}
                 />
               </div>
@@ -250,7 +249,20 @@ export default function LiveMonitor() {
                 SENTIMENT OVER TIME
               </p>
               <div className="flex-1">
-                <SentimentChart data={chartData} />
+                {chartData.length >= 5 ? (
+                  <SentimentChart data={chartData} />
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center gap-2">
+                    <p className="text-[10px] tracking-widest text-muted-foreground uppercase">
+                      WAITING FOR DATA
+                    </p>
+                    <p className="text-[9px] text-muted-foreground/60">
+                      {chartData.length === 0
+                        ? "Start the simulation or classify posts to begin"
+                        : `${chartData.length} of 5 data points collected`}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

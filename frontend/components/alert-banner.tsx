@@ -1,10 +1,9 @@
 interface AlertBannerProps {
-  pct:           number;
-  dominantTopic: string;
-  message:       string;
+  pct:     number;
+  message: string;
 }
 
-export function AlertBanner({ pct, dominantTopic, message }: AlertBannerProps) {
+export function AlertBanner({ pct, message }: AlertBannerProps) {
   return (
     <div className="border border-alert-border bg-alert-bg px-4 py-3 flex items-start gap-3">
       <span className="w-2 h-2 rounded-full bg-alert-border shrink-0 mt-0.5 status-pulse" />
@@ -14,7 +13,7 @@ export function AlertBanner({ pct, dominantTopic, message }: AlertBannerProps) {
         </p>
         <p className="text-xs text-foreground leading-relaxed">{message}</p>
         <p className="text-[9px] text-muted-foreground font-mono">
-          {pct.toFixed(1)}% of last 30 posts — {dominantTopic.replace(/_/g, " ").toUpperCase()}
+          {pct.toFixed(1)}% of last 30 posts
         </p>
       </div>
     </div>

@@ -179,12 +179,13 @@ def stats():
     """
     if not session_results:
         return {
-            "total":          0,
-            "emotion_counts": {e: 0 for e in EMOTIONS},
-            "emotion_pct":    {e: 0.0 for e in EMOTIONS},
-            "topic_counts":   {t: 0 for t in TOPICS},
-            "alert":          None,
+            "total":            0,
+            "emotion_counts":   {e: 0 for e in EMOTIONS},
+            "emotion_pct":      {e: 0.0 for e in EMOTIONS},
+            "topic_counts":     {t: 0 for t in TOPICS},
+            "alert":            None,
             "dominant_emotion": None,
+            "dominant_topic":   None,
         }
 
     emotion_counts = Counter(r["emotion"] for r in session_results)
@@ -210,7 +211,7 @@ def stats():
     neg_ang_pct = neg_ang_count / recent_total * 100 if recent_total > 0 else 0
 
     alert = None
-    if neg_ang_pct >= 40:
+    if recent_total >= 10 and neg_ang_pct >= 40:
         # Find dominant negative topic in recent messages
         recent_topics = Counter(
             t["topic"]
@@ -229,7 +230,21 @@ def stats():
             "message":         f"Negative sentiment spike: {dominant_topic.replace('_', ' ').title()}",
         }
 
-    dominant_emotion = max(emotion_counts, key=emotion_counts.get) if emotion_counts else None
+    dominant_emotion = (
+        max(emotion_pct, key=emotion_pct.get)
+        if total >= 3 and emotion_pct
+        else None
+    )
+
+    all_topics = Counter(
+        t["topic"]
+        for r in session_results
+        for t in r.get("topics", [])
+    )
+    dominant_topic = (
+        all_topics.most_common(1)[0][0]
+        if all_topics else None
+    )
 
     return {
         "total":            total,
@@ -238,4 +253,5 @@ def stats():
         "topic_counts":     dict(topic_counts),
         "alert":            alert,
         "dominant_emotion": dominant_emotion,
+        "dominant_topic":   dominant_topic,
     }
