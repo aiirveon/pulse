@@ -153,7 +153,6 @@ export default function Simulator() {
                 <div className="px-4 pt-3 shrink-0">
                   <AlertBanner
                     pct={stats.alert.pct}
-                    dominantTopic={stats.alert.dominant_topic}
                     message={stats.alert.message}
                   />
                 </div>
