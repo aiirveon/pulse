@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pulse — System Architecture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #060f06;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-width: 1440px;
+      overflow-x: auto;
+      padding: 32px 24px 48px;
+    }
+
+    .canvas {
+      background: #0d1f0d;
+      border-radius: 16px;
+      width: 1440px;
+      min-height: 750px;
+      margin: 0 auto;
+      padding: 32px 36px 36px;
+      position: relative;
+    }
+
+    /* ── Title ── */
+    .title-block {
+      margin-bottom: 28px;
+    }
+    .title-block h1 {
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      line-height: 1.2;
+    }
+    .title-block .subtitle {
+      color: #998f7a;
+      font-size: 12px;
+      margin-top: 5px;
+      letter-spacing: 0.2px;
+    }
+
+    /* ── Layer label ── */
+    .layer-label {
+      color: #998f7a;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* ── Row ── */
+    .row {
+      display: flex;
+      gap: 22px;
+      justify-content: space-between;
+    }
+
+    /* ── Box ── */
+    .box {
+      background: #122712;
+      border: 2px solid #c8a74c;
+      border-radius: 10px;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .box-accent {
+      height: 3px;
+      background: #c8a74c;
+      width: 100%;
+      flex-shrink: 0;
+    }
+
+    .box-inner {
+      padding: 13px 16px 15px;
+      flex: 1;
+    }
+
+    .box-header {
+      color: #c8a74c;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .box-file {
+      color: #998f7a;
+      font-size: 9.5px;
+      margin-bottom: 11px;
+    }
+
+    .section {
+      margin-bottom: 9px;
+    }
+
+    .section-label {
+      color: #c8a74c;
+      font-size: 10px;
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+
+    .item {
+      color: #e0d8c1;
+      font-size: 10px;
+      line-height: 1.55;
+      padding-left: 10px;
+      position: relative;
+    }
+    .item::before {
+      content: '·';
+      position: absolute;
+      left: 2px;
+      color: #c8a74c;
+    }
+
+    /* ── API band ── */
+    .api-band {
+      margin: 18px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .api-band-label {
+      color: #998f7a;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .api-arrows {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      background: #0a190a;
+      border: 1px solid #2a3d2a;
+      border-radius: 8px;
+      padding: 10px 20px 12px;
+      justify-content: space-around;
+    }
+
+    .api-arrow-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      flex: 1;
+    }
+
+    .api-arrow-item + .api-arrow-item {
+      border-left: 1px solid #1e301e;
+    }
+
+    .api-label {
+      color: #c8a74c;
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    .arrow-down {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 9px solid #c8a74c;
+    }
+
+    .arrow-shaft {
+      width: 2px;
+      height: 10px;
+      background: #c8a74c;
+    }
+
+    /* ── BAFTA note ── */
+    .bafta-note {
+      border: 1.5px solid #c8a74c;
+      border-radius: 8px;
+      padding: 11px 18px;
+      margin: 20px auto 0;
+      max-width: 860px;
+      text-align: center;
+    }
+
+    .bafta-note p {
+      color: #e0d8c1;
+      font-size: 10.5px;
+      line-height: 1.6;
+    }
+
+    .bafta-note strong {
+      color: #c8a74c;
+    }
+
+    /* ── Footer ── */
+    .footer-note {
+      margin-top: 18px;
+      text-align: center;
+      color: #998f7a;
+      font-size: 10px;
+      line-height: 1.7;
+    }
+
+    .footer-note span {
+      display: inline-block;
+      padding: 0 8px;
+      border-right: 1px solid #2a3d2a;
+    }
+    .footer-note span:last-child {
+      border-right: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+
+    <!-- Title -->
+    <div class="title-block">
+      <h1>Pulse — System Architecture</h1>
+      <div class="subtitle">AI Audience Sentiment Monitor &nbsp;·&nbsp; Next.js + FastAPI + XGBoost + SHAP &nbsp;·&nbsp; Ofcom-Aligned</div>
+    </div>
+
+    <!-- ROW 1: FRONTEND -->
+    <div class="layer-label">LAYER 1 — NEXT.JS FRONTEND (pulse-pi-inky.vercel.app)</div>
+    <div class="row">
+
+      <!-- Box 1: Live Monitor -->
+      <div class="box">
+        <div class="box-accent"></div>
+        <div class="box-inner">
+          <div class="box-header">Live Monitor</div>
+          <div class="box-file">app/page.tsx</div>
+
+          <div class="section">
+            <div class="section-label">Manual Input</div>
+            <div class="item">POST /api/classify on submit</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Scripted Feed</div>
+            <div class="item">polls GET /api/feed/next every 3s</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Visualisation</div>
+            <div class="item">Sentiment chart (last 30 data points)</div>
+            <div class="item">Topic bars (6 categories)</div>
+            <div class="item">Alert banner (fires on negative spike)</div>
+            <div class="item">Cold start: health ping every 4s, up to 25 retries</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Box 2: BAFTA Simulator -->
+      <div class="box">
+        <div class="box-accent"></div>
+        <div class="box-inner">
+          <div class="box-header">BAFTA Simulator</div>
+          <div class="box-file">app/simulator/page.tsx</div>
+
+          <div class="section">
+            <div class="section-label">Narrative Arc</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">5 Stages</div>
+            <div class="item">Opening → excited</div>
+            <div class="item">Early Awards → positive</div>
+            <div class="item">Controversy → negative/angry spike</div>
+            <div class="item">Recovery → excited</div>
+            <div class="item">Closing → positive</div>
+            <div class="item">Polls GET /api/feed/next every 2.5s</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Stats Sidebar</div>
+            <div class="item">emotion split %</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Box 3: Editorial Guardrail -->
+      <div class="box">
+        <div class="box-accent"></div>
+        <div class="box-inner">
+          <div class="box-header">Editorial Guardrail</div>
+          <div class="box-file">components/editorial-guardrail.tsx</div>
+
+          <div class="section">
+            <div class="section-label">Ofcom Compliance</div>
+            <div class="item">Shown on every page</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Persistent Footer</div>
+            <div class="item">"Pulse surfaces audience signals."</div>
+            <div class="item">"Editorial decisions remain"</div>
+            <div class="item">"with the producer."</div>
+          </div>
+
+          <div class="section" style="margin-top: 10px;">
+            <div class="item" style="padding-left: 0; color: #998f7a; font-size: 9.5px;">
+              &nbsp;Architectural decision, not UI detail
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /row 1 -->
+
+    <!-- API Band -->
+    <div class="api-band">
+      <div class="api-band-label">lib/api.ts &nbsp;→&nbsp; http://backend</div>
+      <div class="api-arrows">
+
+        <div class="api-arrow-item">
+          <div class="api-label">POST /api/classify</div>
+          <div class="arrow-shaft"></div>
+          <div class="arrow-down"></div>
+        </div>
+
+        <div class="api-arrow-item">
+          <div class="api-label">POST /api/feed/start</div>
+          <div class="arrow-shaft"></div>
+          <div class="arrow-down"></div>
+        </div>
+
+        <div class="api-arrow-item">
+          <div class="api-label">GET /api/feed/next</div>
+          <div class="arrow-shaft"></div>
+          <div class="arrow-down"></div>
+        </div>
+
+        <div class="api-arrow-item">
+          <div class="api-label">GET /api/stats</div>
+          <div class="arrow-shaft"></div>
+          <div class="arrow-down"></div>
+        </div>
+
+        <div class="api-arrow-item">
+          <div class="api-label">GET /health</div>
+          <div class="arrow-shaft"></div>
+          <div class="arrow-down"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ROW 2: BACKEND -->
+    <div class="layer-label">LAYER 2 — FASTAPI BACKEND (backend/)</div>
+    <div class="row">
+
+      <!-- Box 4: API Endpoints -->
+      <div class="box">
+        <div class="box-accent"></div>
+        <div class="box-inner">
+          <div class="box-header">API Endpoints</div>
+          <div class="box-file">api/main.py</div>
+
+          <div class="section">
+            <div class="section-label">POST /api/classify</div>
+            <div class="item">validates content, calls predictor, stores in session</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">GET /api/feed/next</div>
+            <div class="item">gets batch from FeedSimulator, classifies each post</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">GET /api/stats</div>
+            <div class="item">emotion counts, topic counts, alert logic</div>
+            <div class="item">Alert rule: negative+angry &gt; 40% of last 30 posts</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">GET /health</div>
+            <div class="item">cold start wake, returns model info</div>
+            <div class="item">Session state: in-memory list (no database)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Box 5: Prediction Engine -->
+      <div class="box">
+        <div class="box-accent"></div>
+        <div class="box-inner">
+          <div class="box-header">Prediction Engine</div>
+          <div class="box-file">api/predictor.py</div>
+
+          <div class="section">
+            <div class="section-label">Tier 1</div>
+            <div class="item">≤3 words: neutral, confidence 0.4, £0 cost</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Tier 2</div>
+            <div class="item">4–20 words: Claude Haiku</div>
+            <div class="item">emotion + topics, no SHAP</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Tier 3</div>
+            <div class="item">&gt;20 words: TF-IDF → XGBoost → SHAP top 5 words</div>
+            <div class="item">Topic model: multi-label, threshold 0.3, returns top 2</div>
+            <div class="item">Both models share single TF-IDF vectoriser</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Box 6: Model Artefacts -->
+      <div class="box">
+        <div class="box-accent"></div>
+        <div class="box-inner">
+          <div class="box-header">Model Artefacts</div>
+          <div class="box-file">backend/model/</div>
+
+          <div class="section">
+            <div class="section-label">Emotion Model</div>
+            <div class="item">emotion_model.pkl: XGBoost multiclass</div>
+            <div class="item">5 classes: excited, positive, neutral, negative, angry</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Topic Model</div>
+            <div class="item">topic_model.pkl: XGBoost OneVsRest multi-label</div>
+            <div class="item">6 topics: winner_reaction, presenter_performance,</div>
+            <div class="item">ceremony_production, diversity_representation,</div>
+            <div class="item">fashion_red_carpet, general_audience_reaction</div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Shared Vectoriser</div>
+            <div class="item">vectorizer.pkl: TF-IDF shared by both models</div>
+            <div class="item">mlb.pkl: MultiLabelBinarizer</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /row 2 -->
+
+    <!-- BAFTA Arc Note -->
+    <div class="bafta-note">
+      <p>
+        <strong>Scripted BAFTA Arc (feed.py)</strong> — 30 posts across 5 stages designed to produce a measurable narrative arc for demo purposes:<br>
+        Opening (excited) → Early Awards (positive) → Controversy (negative/angry spike) → Recovery (excited) → Closing (positive)
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer-note">
+      <span>Tier 1 and Tier 3 classification: zero API cost</span><span>Tier 2 (4–20 words) calls Claude Haiku ~£0.0004/call</span><span>No user data persisted — session state in-memory only</span><span>Editorial Guardrail on every page — Ofcom Broadcasting Code aligned</span>
+    </div>
+
+  </div><!-- /canvas -->
+</body>
+</html>
