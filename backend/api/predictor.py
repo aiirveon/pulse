@@ -96,22 +96,27 @@ def classify_with_claude(text: str) -> dict:
             raw = "\n".join(lines).strip()
         result = _json.loads(raw)
         return {
-            "emotion":    result.get("emotion", "neutral"),
-            "confidence": float(result.get("confidence", 0.75)),
-            "shap_words": [],
-            "all_scores": {e: 0.1 for e in EMOTIONS},
-            "topics":     [{"topic": t, "confidence": 0.8}
-                          for t in result.get("topics", ["general_audience_reaction"])],
-            "tier":       2,
+            "emotion":          result.get("emotion", "neutral"),
+            "confidence":       float(result.get("confidence", 0.75)),
+            "confidence_type":  "estimated",
+            "shap_words":       [],
+            "all_scores":       {e: 0.1 for e in EMOTIONS},
+            "topics":           [{"topic": t, "confidence": 0.8, "confidence_type": "estimated"}
+                                 for t in result.get("topics", ["general_audience_reaction"])],
+            "tier":             2,
+            "degraded":         False,
         }
-    except Exception:
+    except Exception as exc:
         return {
-            "emotion":    "neutral",
-            "confidence": 0.5,
-            "shap_words": [],
-            "all_scores": {e: 0.2 for e in EMOTIONS},
-            "topics":     [{"topic": "general_audience_reaction", "confidence": 0.5}],
-            "tier":       2,
+            "emotion":          "unavailable",
+            "confidence":       0.0,
+            "confidence_type":  "estimated",
+            "shap_words":       [],
+            "all_scores":       {e: 0.0 for e in EMOTIONS},
+            "topics":           [],
+            "tier":             2,
+            "degraded":         True,
+            "error":            f"Claude API failure: {type(exc).__name__}",
         }
 
 
@@ -128,11 +133,13 @@ def classify_emotion(text: str) -> dict:
     # Tier 1 — too short to classify reliably
     if word_count <= 3:
         return {
-            "emotion":    "neutral",
-            "confidence": 0.4,
-            "shap_words": [],
-            "all_scores": {e: 0.2 for e in EMOTIONS},
-            "tier":       1,
+            "emotion":         "neutral",
+            "confidence":      0.4,
+            "confidence_type": "estimated",
+            "shap_words":      [],
+            "all_scores":      {e: 0.2 for e in EMOTIONS},
+            "tier":            1,
+            "degraded":        False,
         }
 
     # Tier 2 — short text, use Claude for semantic understanding
@@ -148,14 +155,16 @@ def classify_emotion(text: str) -> dict:
     shap_words = get_shap_words(text, label_index)
 
     return {
-        "emotion":    emotion,
-        "confidence": round(confidence, 4),
-        "shap_words": shap_words,
-        "all_scores": {
+        "emotion":         emotion,
+        "confidence":      round(confidence, 4),
+        "confidence_type": "calibrated",
+        "shap_words":      shap_words,
+        "all_scores":      {
             e: round(float(proba[i]), 4)
             for i, e in enumerate(EMOTIONS)
         },
-        "tier": 3,
+        "tier":            3,
+        "degraded":        False,
     }
 
 

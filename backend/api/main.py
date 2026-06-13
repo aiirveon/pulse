@@ -55,14 +55,17 @@ class ClassifyRequest(BaseModel):
     content: str
 
 class ClassifyResponse(BaseModel):
-    content:    str
-    emotion:    str
-    confidence: float
-    shap_words: list[str]
-    all_scores: dict
-    topics:     list[dict]
-    source:     str = "manual"
-    timestamp:  float = 0.0
+    content:         str
+    emotion:         str
+    confidence:      float
+    confidence_type: str
+    shap_words:      list[str]
+    all_scores:      dict
+    topics:          list[dict]
+    source:          str = "manual"
+    timestamp:       float = 0.0
+    degraded:        bool = False
+    error:           str | None = None
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Endpoints
@@ -101,14 +104,17 @@ def classify(request: ClassifyRequest):
     topic_result   = classify_topics(content)
 
     result = {
-        "content":    content,
-        "emotion":    emotion_result["emotion"],
-        "confidence": emotion_result["confidence"],
-        "shap_words": emotion_result["shap_words"],
-        "all_scores": emotion_result["all_scores"],
-        "topics":     topic_result,
-        "source":     "manual",
-        "timestamp":  time.time(),
+        "content":         content,
+        "emotion":         emotion_result["emotion"],
+        "confidence":      emotion_result["confidence"],
+        "confidence_type": emotion_result["confidence_type"],
+        "shap_words":      emotion_result["shap_words"],
+        "all_scores":      emotion_result["all_scores"],
+        "topics":          topic_result,
+        "source":          "manual",
+        "timestamp":       time.time(),
+        "degraded":        emotion_result.get("degraded", False),
+        "error":           emotion_result.get("error"),
     }
 
     session_results.append(result)
@@ -150,15 +156,18 @@ def feed_next(batch_size: int = 3):
         topic_result   = classify_topics(content)
 
         result = {
-            "content":    content,
-            "emotion":    emotion_result["emotion"],
-            "confidence": emotion_result["confidence"],
-            "shap_words": emotion_result["shap_words"],
-            "all_scores": emotion_result["all_scores"],
-            "topics":     topic_result,
-            "stage":      post["stage"],
-            "source":     "feed",
-            "timestamp":  time.time(),
+            "content":         content,
+            "emotion":         emotion_result["emotion"],
+            "confidence":      emotion_result["confidence"],
+            "confidence_type": emotion_result["confidence_type"],
+            "shap_words":      emotion_result["shap_words"],
+            "all_scores":      emotion_result["all_scores"],
+            "topics":          topic_result,
+            "stage":           post["stage"],
+            "source":          "feed",
+            "timestamp":       time.time(),
+            "degraded":        emotion_result.get("degraded", False),
+            "error":           emotion_result.get("error"),
         }
 
         session_results.append(result)
@@ -188,21 +197,24 @@ def stats():
             "dominant_topic":   None,
         }
 
-    emotion_counts = Counter(r["emotion"] for r in session_results)
+    classified = [r for r in session_results if not r.get("degraded", False)]
+    degraded_count = len(session_results) - len(classified)
+
+    emotion_counts = Counter(r["emotion"] for r in classified)
     topic_counts   = Counter(
         t["topic"]
-        for r in session_results
+        for r in classified
         for t in r.get("topics", [])
     )
 
-    total = len(session_results)
+    total = len(classified)
     emotion_pct = {
-        e: round(emotion_counts.get(e, 0) / total * 100, 1)
+        e: round(emotion_counts.get(e, 0) / total * 100, 1) if total else 0.0
         for e in EMOTIONS
     }
 
-    # Alert: fires when negative + angry > 40% of last 30 messages
-    recent        = session_results[-30:]
+    # Alert: fires when negative + angry > 40% of last 30 classified messages
+    recent        = classified[-30:]
     recent_total  = len(recent)
     neg_ang_count = sum(
         1 for r in recent
@@ -238,7 +250,7 @@ def stats():
 
     all_topics = Counter(
         t["topic"]
-        for r in session_results
+        for r in classified
         for t in r.get("topics", [])
     )
     dominant_topic = (
@@ -248,6 +260,7 @@ def stats():
 
     return {
         "total":            total,
+        "degraded_count":   degraded_count,
         "emotion_counts":   dict(emotion_counts),
         "emotion_pct":      emotion_pct,
         "topic_counts":     dict(topic_counts),

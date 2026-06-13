@@ -11,47 +11,118 @@
 
 ## 1. What the models do
 
-Pulse uses two classifiers running in sequence on every social media post:
+Pulse classifies every social media post into an emotion and one or more
+topics. Classification is not handled by a single model — it uses a
+three-tier routing system that selects the right approach based on how
+many words the post contains. This routing is a deliberate product
+decision, explained in Section 2.
 
-Model 1 — Emotion classifier
+### Routing overview
+
+| Tier | Word count | Approach | Typical example |
+|------|-----------|----------|-----------------|
+| 1 | ≤ 3 words | Rule-based low-confidence neutral | "lol", "wow ok" |
+| 2 | 4–20 words | Claude API (LLM) semantic classification | "that was painful to watch honestly" |
+| 3 | > 20 words | TF-IDF vectoriser + XGBoost + SHAP | Full-sentence posts and threads |
+
+In practice, the majority of social media posts during a live broadcast
+event — including nearly all of the scripted demo feed — fall in the
+4–20 word range and are classified by Tier 2, not XGBoost.
+
+---
+
+### Emotion classifier
+
 Classifies the emotional tone of a post into one of five categories:
 excited, positive, neutral, negative, angry.
-Architecture: TF-IDF vectoriser + XGBoost (5-class single-label)
 
-Model 2 — Topic classifier
+- **Tier 1**: returns "neutral" with confidence 0.4. This is not a
+  real classification — it is an honest statement that the text is too
+  short to classify reliably.
+- **Tier 2**: asks the Claude API to return an emotion and confidence
+  score. The confidence is a number the model is prompted to produce
+  between 0.70 and 0.95. It reflects the LLM's self-assessment, not a
+  calibrated probability.
+- **Tier 3**: TF-IDF vectoriser + XGBoost, 5-class single-label.
+  Confidence is `predict_proba` — a calibrated probability from the
+  classifier. Word-level SHAP values are computed at the same time.
+
+---
+
+### Topic classifier
+
 Classifies what the post is about into one or more of six categories:
 winner_reaction, presenter_performance, ceremony_production,
 diversity_representation, fashion_red_carpet, general_audience_reaction.
-Architecture: TF-IDF vectoriser + OneVsRest XGBoost (6-class multi-label)
+
+Architecture: TF-IDF vectoriser + OneVsRest XGBoost (6-class multi-label).
+Applied at all tiers. For Tier 2 posts the Claude prompt also requests
+topic tags; these are merged with the XGBoost topic result. Tier 3
+uses XGBoost `predict_proba` for topic confidence — these are calibrated.
 
 Both models share a single TF-IDF vectoriser trained on the full dataset.
 
 ---
 
-## 2. Why TF-IDF + XGBoost and not a transformer
+## 2. Why a tiered hybrid architecture
 
-Three reasons, all product decisions:
+The routing decision follows a simple principle: use the cheapest tool
+that has enough signal to classify reliably. Different post lengths have
+very different signal characteristics, and a single model cannot handle
+all of them well.
 
-Reason 1 — SHAP explainability
-TF-IDF + XGBoost produces word-level SHAP values that show exactly which
-words drove a classification. A broadcast producer seeing a negative
-sentiment spike can click through and see which words triggered it.
-Transformer models produce embeddings that are harder to explain at the
-word level without additional tooling.
+### Tier 1 — very short fragments (≤ 3 words)
 
-Reason 2 — Inference speed
-TF-IDF + XGBoost classifies a post in under 10ms on a CPU. The live
-dashboard requires classifications to appear within 2 seconds of a post
-being submitted. Transformer inference on CPU is 10-50x slower.
+A fragment like "wow" or "lol" gives a bag-of-words model almost nothing
+to work with. An LLM has more context than a classical model, but a
+three-word post still lacks enough content to distinguish "wow" (excited)
+from "wow" (sarcastic negative). Returning a confident emotion would be
+false precision. Tier 1 returns a low-confidence neutral and makes this
+explicit in the confidence score (0.4) and confidence_type ("estimated"),
+so the producer knows not to weight the result.
 
-Reason 3 — Deployment cost
-The backend runs on Render free tier. Transformer models require
-significantly more memory and compute. TF-IDF + XGBoost runs comfortably
-within free tier constraints.
+### Tier 2 — short text (4–20 words)
 
-Trade-off accepted: transformer models would produce higher F1 scores,
-particularly on subtle boundary cases like negative vs angry. This
-improvement is deferred to v2 when a paid deployment tier is appropriate.
+TF-IDF represents text as a word-frequency vector. On a 10-word post,
+most vector dimensions are zero — there is almost no lexical signal for
+the model to work with. More importantly, TF-IDF has no semantic
+understanding: "that was brutal" and "that was brilliant" share no
+vocabulary and are orthogonal in TF-IDF space, but an LLM understands
+that one is negative and one is positive from the semantics of the words.
+
+Routing short posts to the Claude API gives Tier 2 posts the semantic
+understanding a classical model cannot provide at this text length. The
+trade-off is real: each Tier 2 classification is an API round-trip
+(typically 200–800 ms) and has a per-call cost (fractions of a penny at
+Haiku rates). At demo-feed volume this is negligible. At production scale
+it informs the v2 decision to train on real data and eliminate the API
+dependency (see Section 8).
+
+### Tier 3 — full-length posts (> 20 words)
+
+Posts above 20 words give TF-IDF enough lexical signal to classify
+reliably. At this length, the classical model offers three advantages the
+LLM path does not:
+
+1. **Speed**: TF-IDF + XGBoost classifies in under 10 ms on CPU, versus
+   an API round-trip.
+2. **Cost**: zero per-inference cost after training.
+3. **Explainability**: word-level SHAP values are computed at the same
+   time as the prediction. A producer can see exactly which words drove
+   a "negative" classification — a hard requirement from the Ethics
+   Framework on operator accountability.
+
+---
+
+### Tier comparison
+
+| | Tier 1 | Tier 2 | Tier 3 |
+|---|---|---|---|
+| Typical input | Fragments ≤ 3 words | Short posts 4–20 words | Full posts > 20 words |
+| Latency | < 1 ms | 200–800 ms (API round-trip) | < 10 ms |
+| Cost per classification | None | ~$0.0001 (Haiku) | None |
+| SHAP explainability | No | No | Yes |
+| Confidence type | Estimated | Estimated | Calibrated |
 
 ---
 
@@ -87,7 +158,18 @@ All data generation prompts implement the definitions in that guide.
 
 ## 4. Final F1 scores
 
-### Emotion classifier
+**Important caveat on scope.** The F1 tables below measure the Tier 3
+XGBoost classifier on the held-out test set only. They do not measure
+Tier 2 (Claude API) classification accuracy. Tier 2 is not separately
+benchmarked in v1 — there is no offline F1 figure for it, and no such
+figure is claimed. Tier 2 accuracy depends on the Claude model's
+performance on short broadcast social media posts, which has not been
+formally evaluated. This is logged as a gap in Section 8.
+
+The F1 scores below therefore describe how well the classical model
+classifies longer posts, not how well the system classifies all posts.
+
+### Emotion classifier (Tier 3 — XGBoost)
 
 | Emotion  | F1    | Status           |
 |----------|-------|------------------|
@@ -98,7 +180,7 @@ All data generation prompts implement the definitions in that guide.
 | angry    | 0.815 | Pass (>= 0.78)   |
 | Macro F1 | 0.830 | —                |
 
-### Topic classifier
+### Topic classifier (Tier 3 — XGBoost)
 
 | Topic                      | F1    | Status           |
 |----------------------------|-------|------------------|
@@ -119,8 +201,8 @@ lower threshold accepted, documented below)
 
 ### Limitation 1 — negative emotion F1 0.750
 
-What it means: The model correctly classifies negative posts 75% of the
-time on the test set. The primary failure mode is confusion with angry —
+What it means: The Tier 3 model correctly classifies negative posts 75% of
+the time on the test set. The primary failure mode is confusion with angry —
 posts near the boundary between calm disappointment and cold sarcasm
 sometimes misclassify in either direction.
 
@@ -175,11 +257,72 @@ Production mitigation: Fashion topic tags are informational, not used
 in alert thresholds. Missing a fashion post does not affect any
 producer decision.
 
+### Limitation 4 — Tier 2 accuracy is not benchmarked
+
+What it means: There is no offline F1 figure for the Claude API
+classification path. The vast majority of posts in the live feed go
+through Tier 2. The F1 scores in Section 4 do not describe this path.
+
+Why it is not fixed in v1: Building a held-out benchmark for Tier 2
+requires labelled short-post examples and a repeatable eval harness.
+This is feasible but was not in scope for v1. The gap is accepted
+because (a) LLM semantic classification of simple short posts is
+qualitatively well-behaved and (b) Tier 2 results are labelled
+"estimated" in the UI so producers are not given false precision.
+
+Gap logged for v2: Add a separate Tier 2 eval set (200+ labelled
+short posts, 4–20 words) and report F1 per emotion alongside the
+Tier 3 numbers.
+
 ---
 
-## 6. What the model cannot do
+## 6. Failure-mode and confidence honesty
 
-The model cannot:
+Two design decisions in the code directly implement the Ethics Framework
+principle that confidence signals must be honest.
+
+### 6a — Confidence type labelling
+
+Every classification result carries a `confidence_type` field:
+
+- `"calibrated"` — Tier 3 (XGBoost `predict_proba`). This is a genuine
+  calibrated probability from the classifier. 80% confidence means the
+  model is right approximately 80% of the time at this score on the
+  test set.
+- `"estimated"` — Tier 1 and Tier 2. For Tier 2, the confidence is a
+  number the Claude model is prompted to return between 0.70 and 0.95.
+  It reflects the LLM's self-reported certainty, not a calibrated
+  probability from a held-out evaluation. Presenting it as equivalent
+  to a Tier 3 probability would mislead the producer.
+
+The UI renders an "est." label next to Tier 1 and Tier 2 confidence
+scores so the producer can see at a glance whether the number is
+calibrated or estimated.
+
+### 6b — Explicit degraded state for API failures
+
+If the Claude API call in Tier 2 throws any exception, the classification
+does not silently return a neutral result. It returns an explicit
+degraded state: `emotion: "unavailable"`, `degraded: true`, and an error
+string. Degraded posts are:
+
+- Excluded from all emotion counts and percentages in the stats endpoint.
+- Excluded from the negative-spike alert threshold calculation.
+- Rendered in the UI with a distinct failed-classification indicator
+  rather than an emotion badge.
+
+The reason this matters: a silent neutral fallback during a negative
+sentiment spike would drag down the negative percentage and suppress
+the alert. That is exactly the scenario where the product's core job is
+to warn the producer. A fake neutral at that moment is actively
+misleading. An explicit degraded state preserves the integrity of the
+signal that does exist.
+
+---
+
+## 7. What the model cannot do
+
+The system cannot:
 - Detect sarcasm reliably in all contexts
 - Classify posts longer than approximately 280 characters accurately
   (it was trained on Twitter-length posts)
@@ -187,16 +330,22 @@ The model cannot:
 - Detect hate speech, explicit content, or harmful language
   (this is not what it was designed for)
 - Replace human editorial judgement
+- Provide calibrated accuracy figures for Tier 2 classifications
+  (not benchmarked in v1 — see Section 5, Limitation 4)
 
-The model can:
+The system can:
 - Reliably detect when audience sentiment shifts toward negative or angry
+  (Tier 3 in under 10 ms; Tier 2 via API round-trip)
 - Identify which specific topics are generating the most emotional response
-- Surface confidence scores so producers know when to trust the output
-- Provide real-time classification at gallery speed (under 10ms)
+- Surface confidence scores labelled by type so producers know whether
+  to treat a number as a calibrated probability or an estimate
+- Classify short posts semantically where a bag-of-words model has no signal
+- Exclude failed classifications from the sentiment stats rather than
+  silently corrupting them
 
 ---
 
-## 7. Threshold rationale
+## 8. Threshold rationale
 
 The 0.78 F1 threshold was set in the PRD before training began.
 The reasoning: 0.78 represents the point at which a classification is
@@ -211,11 +360,20 @@ multi-label text classification is typically 0.70-0.80. Setting 0.75
 as the floor for topic classification acknowledges this while still
 requiring meaningful performance.
 
+These thresholds apply to the Tier 3 XGBoost classifier. No formal
+threshold has been set for Tier 2, as it has not been benchmarked.
+Setting a formal threshold is a v2 action item.
+
 ---
 
-## 8. v2 roadmap for model improvements
+## 9. v2 roadmap for model improvements
 
-1. Bootstrapped labelling from real broadcast data (REQUIRES DPIA)
+1. **Benchmark Tier 2 accuracy** (highest priority gap)
+   Build a labelled short-post eval set (200+ posts, 4–20 words) and
+   report per-emotion F1 for the Claude API classification path. Set a
+   formal accuracy threshold equivalent to the Tier 3 threshold. This
+   closes the largest honesty gap in the current v1 documentation.
+2. **Bootstrapped labelling from real broadcast data** (REQUIRES DPIA)
    Collect anonymised audience comments from one live show using
    official platform APIs. Use Claude API classifications as labels.
    Retrain XGBoost on this real dataset to eliminate Tier 2 API cost
@@ -227,13 +385,14 @@ requiring meaningful performance.
    events to avoid feedback loop, document demographic skew in
    MODEL_DECISIONS.md. Estimated cost saving at production scale
    (10,000+ posts/hour): eliminates ~$3/hour in Claude API spend.
-2. Retrain negative/angry boundary with real social data from
+3. Retrain negative/angry boundary with real social data from
    a consented pilot with broadcast team (target: negative F1 > 0.82)
-3. Upgrade to sentence transformer for semantic classification
-   (target: all emotions > 0.85)
-4. Expand training data beyond BAFTA to other live broadcast events
+4. Upgrade to sentence transformer for semantic classification
+   (target: all emotions > 0.85), replacing Tier 2 with a locally
+   hosted model that gives calibrated probabilities and SHAP support
+5. Expand training data beyond BAFTA to other live broadcast events
    (election nights, sporting finals, music awards)
-5. Add confidence calibration layer to improve reliability of
-   probability scores
-6. Evaluate fairness metrics across demographic groups in test set
+6. Add explicit confidence calibration layer to Tier 3 to improve
+   alignment between reported probability and empirical accuracy
+7. Evaluate fairness metrics across demographic groups in test set
    using Fairlearn (as implemented in Bias Audit Dashboard)

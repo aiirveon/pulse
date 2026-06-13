@@ -1,12 +1,8 @@
-Good. Now the PRD.
-
----
-
-## PRODUCT REQUIREMENTS DOCUMENT
+# PRODUCT REQUIREMENTS DOCUMENT
 **Product:** Pulse — AI Audience Sentiment Monitor for Live Broadcasting
 **Author:** Ogbebor Osaheni
 **Date:** March 2026
-**Status:** Phase 0 — Pre-build
+**Status:** v1 shipped — June 2026
 **GitHub:** https://github.com/aiirveon/pulse
 
 ---
@@ -37,6 +33,8 @@ The gap: a tool that classifies audience sentiment in real time, by topic and em
 | Auto-feed simulation | 200+ messages, scripted narrative arc | Manual count |
 | Demo uptime | Public URL live, cold start handled | Deployment check |
 | PM artefacts | 4 documents committed before first line of code | GitHub commit history |
+
+**Results vs targets (v1):** The macro emotion F1 target (> 0.82) was substantially met at 0.830, but two categories landed below their per-category targets: `negative` emotion at 0.750 and `general_audience_reaction` topic at 0.304. Both were accepted as documented limitations rather than blockers — the full rationale, failure analysis, and production mitigations are in `docs/MODEL_DECISIONS.md` §5. The targets above are preserved as originally written; this note reconciles them against shipped results.
 
 ---
 
@@ -136,20 +134,3 @@ Next.js Frontend (Vercel)
 | Phase 3 | Next.js frontend — 3 panels deployed to Vercel | Public URL live |
 | Phase 4 | Scripted narrative arc — auto-feed tells BAFTA story | 3 sentiment shifts visible in demo |
 
----
-
-That is your PRD — complete and ready to save as `docs/PRD.md`.
-
----
-
-**Commit message when you save it:**
-
-```
-Phase 0: PRD — Pulse AI Audience Sentiment Monitor
-```
-
----
-
-Two artefacts down, two to go before any code. Next is the **Ethics Framework** — and as I flagged earlier, this one has a harder question at its centre than Bias Audit did.
-
-Ready when you are.
